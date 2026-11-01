@@ -1,0 +1,11 @@
+server:
+  port: 8080
+  address: 127.0.0.1        # only reachable from this computer
+
+enablebanking:
+  base-url: https://api.enablebanking.com
+  app-id: ${ENABLE_BANKING_APP_ID:}
+  private-key-path: ${ENABLE_BANKING_KEY_PATH:secrets/private.pem}
+  redirect-url: ${ENABLE_BANKING_REDIRECT_URL:http://localhost:8080/callback}
+  consent-days: ${ENABLE_BANKING_CONSENT_DAYS:90}
+  store-path: ${ENABLE_BANKING_STORE_PATH:data/connections.json}

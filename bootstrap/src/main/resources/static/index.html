@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Banks</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1c2430; --muted:#6b7686; --line:#e3e7ed; --accent:#2f6fed; --warn:#c2410c; --neg:#b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1318; --card:#181e26; --text:#e8edf3; --muted:#93a0b2; --line:#2a3340; --accent:#6b9bff; --warn:#fb923c; --neg:#f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 15px; font-weight: 600; color: var(--muted); margin: 0 0 4px; }
+  .total { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; }
+  .bank-head { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .bank-name { font-weight: 600; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .warn { color: var(--warn); font-size: 13px; }
+  .acc { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-top:1px solid var(--line); cursor:pointer; }
+  .acc:first-of-type { margin-top: 10px; }
+  .amount { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .neg { color: var(--neg); }
+  .tx { padding: 4px 0 8px 12px; border-left: 2px solid var(--line); margin: 0 0 6px 4px; }
+  .tx div { display:flex; justify-content:space-between; gap:12px; font-size:13px; padding:3px 0; }
+  .tx span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  input, button { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+  button { cursor:pointer; background: var(--accent); color:#fff; border-color: var(--accent); }
+  button.ghost { background: transparent; color: var(--muted); border-color: var(--line); font-size:13px; padding:4px 10px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; }
+  .row input { flex:1; min-width: 180px; }
+  .banks { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+  .banner { padding:10px 14px; border-radius:8px; margin-bottom:14px; background: var(--card); border:1px solid var(--line); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Total across all banks</h1>
+  <div class="total" id="total">…</div>
+  <div id="banner"></div>
+  <div id="banks"></div>
+
+  <div class="card">
+    <div class="bank-name">Connect a bank</div>
+    <div class="muted" style="margin:2px 0 10px">Search the exact name (e.g. "Sabadell", "MyInvestor"), then pick it. You'll approve read-only access on your bank's own site.</div>
+    <div class="row">
+      <input id="search" placeholder="Search banks in Spain…" autocomplete="off">
+    </div>
+    <div class="banks" id="results"></div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money = (n, cur) => new Intl.NumberFormat(undefined, { style:'currency', currency: cur || 'EUR' }).format(n);
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.error + (body.detail ? ' – ' + body.detail : ''));
+  return body;
+}
+
+function daysLeft(iso) {
+  if (!iso) return null;
+  return Math.ceil((new Date(iso) - Date.now()) / 86400000);
+}
+
+async function load() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('connected')) $('banner').innerHTML = `<div class="banner">Connected ${esc(params.get('connected'))}.</div>`;
+  if (params.get('error')) $('banner').innerHTML = `<div class="banner neg">Connection failed: ${esc(params.get('error'))}</div>`;
+  history.replaceState(null, '', '/');
+
+  let s;
+  try { s = await api('/api/summary'); }
+  catch (e) { $('total').textContent = '—'; $('banks').innerHTML = `<div class="card neg">${esc(e.message)}</div>`; return; }
+
+  const totals = Object.entries(s.totalsByCurrency);
+  $('total').textContent = totals.length ? totals.map(([c, v]) => money(v, c)).join('  ·  ') : 'No banks connected yet';
+
+  $('banks').innerHTML = s.banks.map(b => {
+    const d = daysLeft(b.validUntil);
+    const expiry = d === null ? '' : d <= 14
+      ? `<span class="warn">Access expires in ${d} day(s) – reconnect soon</span>`
+      : `<span class="muted">Access valid for ${d} more days</span>`;
+    const accounts = b.accounts.map(a => `
+      <div class="acc" data-uid="${esc(a.uid)}">
+        <div><div>${esc(a.name)}</div><div class="muted">${esc(a.iban || '')}</div></div>
+        <div class="amount ${a.balance < 0 ? 'neg' : ''}">${a.balance === null ? `<span class="warn">${esc(a.error)}</span>` : money(a.balance, a.currency)}</div>
+      </div>
+      <div class="tx" id="tx-${esc(a.uid)}" hidden></div>`).join('');
+    return `<div class="card">
+      <div class="bank-head">
+        <span class="bank-name">${esc(b.bank)}</span>
+        <span>${expiry} <button class="ghost" data-remove="${esc(b.sessionId)}">Remove</button>
+        <a class="muted" href="/connect?bank=${encodeURIComponent(b.bank)}&country=${esc(b.country)}">Reconnect</a></span>
+      </div>${accounts}</div>`;
+  }).join('');
+}
+
+document.addEventListener('click', async e => {
+  const rm = e.target.closest('[data-remove]');
+  if (rm) {
+    if (confirm('Remove this bank from the dashboard? (Your bank access is not revoked.)')) {
+      await fetch('/api/connections/' + rm.dataset.remove, { method: 'DELETE' });
+      load();
+    }
+    return;
+  }
+  const acc = e.target.closest('.acc');
+  if (acc) {
+    const box = $('tx-' + acc.dataset.uid);
+    if (!box.hidden) { box.hidden = true; return; }
+    box.hidden = false; box.textContent = 'Loading…';
+    try {
+      const from = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+      const r = await api(`/api/accounts/${acc.dataset.uid}/transactions?dateFrom=${from}`);
+      const txs = (r.transactions || []).slice(0, 25);
+      box.innerHTML = txs.length ? txs.map(t => {
+        const sign = t.credit_debit_indicator === 'DBIT' ? -1 : 1;
+        const amt = sign * Number(t.transaction_amount.amount);
+        const who = (t.credit_debit_indicator === 'DBIT' ? t.creditor?.name : t.debtor?.name)
+          || (t.remittance_information || [])[0] || '—';
+        return `<div><span>${esc(t.booking_date || t.value_date || '')} · ${esc(who)}</span>
+                <span class="amount ${amt < 0 ? 'neg' : ''}">${money(amt, t.transaction_amount.currency)}</span></div>`;
+      }).join('') : '<span class="muted">No transactions in the last 60 days.</span>';
+    } catch (err) { box.innerHTML = `<span class="neg">${esc(err.message)}</span>`; }
+  }
+  const pick = e.target.closest('[data-bank]');
+  if (pick) location.href = `/connect?bank=${encodeURIComponent(pick.dataset.bank)}&country=ES`;
+});
+
+let banksCache = null, timer;
+$('search').addEventListener('input', () => {
+  clearTimeout(timer);
+  timer = setTimeout(async () => {
+    const q = $('search').value.trim().toLowerCase();
+    if (!q) { $('results').innerHTML = ''; return; }
+    try {
+      banksCache ??= (await api('/api/banks?country=ES')).aspsps || [];
+      const hits = banksCache.filter(b => b.name.toLowerCase().includes(q)).slice(0, 12);
+      $('results').innerHTML = hits.length
+        ? hits.map(b => `<button data-bank="${esc(b.name)}">${esc(b.name)}</button>`).join('')
+        : '<span class="muted">No bank with that name in Enable Banking\'s list for Spain.</span>';
+    } catch (err) { $('results').innerHTML = `<span class="neg">${esc(err.message)}</span>`; }
+  }, 250);
+});
+
+load();
+</script>
+</body>
+</html>
