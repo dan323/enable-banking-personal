@@ -13,7 +13,11 @@ No bank passwords ever pass through this app: you approve access on each bank's 
 1. Create an account at <https://enablebanking.com> and open the Control Panel.
 2. Register a new **production** application.
    - Generate the key in the browser/let them generate it, and download the `.pem` private key.
-   - Add this redirect URL: `http://localhost:8080/callback`
+   - Production apps cannot use `localhost` as a redirect URL, so use the HTTPS relay page in `docs/callback.html`
+     (served by GitHub Pages, see below): `https://dan323.github.io/enable-banking-personal/callback.html`
+     It just forwards the bank's response to `http://localhost:8080/callback` in your own browser.
+   - Privacy URL: `https://github.com/dan323/enable-banking-personal/blob/main/PRIVACY.md`,
+     Terms URL: `https://github.com/dan323/enable-banking-personal/blob/main/TERMS.md`
 3. Copy the private key to `secrets/private.pem`.
    - It must start with `-----BEGIN PRIVATE KEY-----`. If it says `BEGIN RSA PRIVATE KEY`, convert it:
      `openssl pkcs8 -topk8 -nocrypt -in old.pem -out secrets/private.pem`
@@ -28,8 +32,15 @@ PowerShell:
 
 ```powershell
 $env:ENABLE_BANKING_APP_ID = "your-application-uuid"
+$env:ENABLE_BANKING_REDIRECT_URL = "https://dan323.github.io/enable-banking-personal/callback.html"
 mvn -pl bootstrap -am spring-boot:run
 ```
+
+The redirect URL sent to the bank must be identical to the one registered at Enable Banking. The local app
+still receives the response at `http://localhost:8080/callback` (via the relay page).
+
+The relay page is published with GitHub Pages: repository **Settings -> Pages -> Deploy from a branch ->
+`main` / `/docs`**.
 
 In IntelliJ: open the folder as a Maven project, add `ENABLE_BANKING_APP_ID` to the run configuration's
 environment variables, set its **working directory to the repository root** (so `secrets/` and `data/`
@@ -71,10 +82,10 @@ Then open <http://localhost:8080>, search for **Sabadell**, click it, approve at
 
 ## Environment variables
 
-| Variable | Default |
-|---|---|
-| `ENABLE_BANKING_APP_ID` | *(required)* |
-| `ENABLE_BANKING_KEY_PATH` | `secrets/private.pem` |
+| Variable                    | Default                          |
+|-----------------------------|----------------------------------|
+| `ENABLE_BANKING_APP_ID`     | *(required)*                     |
+| `ENABLE_BANKING_KEY_PATH`   | `secrets/private.pem`            |
 | `ENABLE_BANKING_REDIRECT_URL` | `http://localhost:8080/callback` |
-| `ENABLE_BANKING_CONSENT_DAYS` | `90` |
-| `ENABLE_BANKING_STORE_PATH` | `data/connections.json` |
+| `ENABLE_BANKING_CONSENT_DAYS` | `90`                             |
+| `ENABLE_BANKING_STORE_PATH` | `data/connections.json`          |

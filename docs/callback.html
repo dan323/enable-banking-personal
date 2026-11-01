@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <title>Returning to your local app…</title>
+  <style>
+    body { font: 16px system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1rem; color: #222; }
+    code { background: #eee; padding: .1em .3em; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <h1>Returning to your local app…</h1>
+  <p>
+    This page only forwards the bank's response to the app running on <em>your own computer</em>
+    (<code>http://localhost:8080/callback</code>). Nothing is processed or stored here.
+  </p>
+  <p id="manual" hidden>
+    If you are not redirected, <a id="link" href="http://localhost:8080/callback">continue manually</a>.
+    Make sure the app is running.
+  </p>
+  <script>
+    // Fixed target on purpose: never redirect anywhere except the local app.
+    var target = "http://localhost:8080/callback" + window.location.search;
+    document.getElementById("link").href = target;
+    document.getElementById("manual").hidden = false;
+    window.location.replace(target);
+  </script>
+</body>
+</html>
